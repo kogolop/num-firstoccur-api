@@ -1,6 +1,15 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import random
 
 app = Flask(__name__)
+CORS(app)
+
+def generate_random_numbers():
+    # Generate a list of 20 random numbers between 1 and 100
+    nums = [random.randint(1, 100) for _ in range(20)]
+    # Sort the list to allow binary search
+    return sorted(nums)
 
 def find_first_occurrence(nums, target):
     left, right = 0, len(nums) - 1
@@ -16,43 +25,41 @@ def find_first_occurrence(nums, target):
             right = mid - 1  # Continue searching to the left.
     return result
 
-@app.route('/')
-def home():
-    return '''
-    <h1>Search API</h1>
-    <form id="searchForm">
-        <label for="target">Enter a Number to Search:</label>
-        <input type="text" id="target" name="target" required>
-        <button type="submit">Search</button>
-    </form>
-    <p id="result"></p>
-    <script>
-        document.getElementById('searchForm').addEventListener('submit', function(event) {
-            event.preventDefault();  // Prevent the form from submitting via the browser
-            var target = document.getElementById('target').value;
-            fetch(`/search?target=${target}`)
-                .then(response => response.text())  // Assuming response is plain text
-                .then(text => document.getElementById('result').textContent = text)
-                .catch(err => document.getElementById('result').textContent = 'Error: ' + err);
-        });
-    </script>
-    '''
-
-@app.route('/search', methods=['GET'])
+@app.route('/api/search', methods=['POST'])
 def search():
-    nums = [2, 5, 5, 5, 6, 6, 8, 9, 9, 9]  # Predefined list of numbers
-    target = request.args.get('target', type=int)
-    
-    if target is None:
-        return "Search Box Cannot Be Empty. Please Enter a Number..!!!", 400
+    data = request.json
+    if not data or 'target' not in data:
+        return jsonify({"error": "Invalid input. Please provide a 'target' number."}), 400
 
-    if target not in nums:
-        return "The number is not in the list. Please try another number.", 404
-    
+    try:
+        target = int(data['target'])
+    except ValueError:
+        return jsonify({"error": "Invalid input. 'target' must be a valid integer."}), 400
+
+    nums = generate_random_numbers()
     index = find_first_occurrence(nums, target)
+    
     if index == -1:
-        return "The number is not in the list.", 404
-    return f"The First Occurrence of {target} is at Index {index} Which is Position {index + 1}"
+        return jsonify({
+            "error": "The number is not in the list.",
+            "numbers": nums
+        }), 404
+    
+    return jsonify({
+        "target": target,
+        "index": index,
+        "position": index + 1,
+        "message": f"The First Occurrence of {target} is at Index {index} Which is Position {index + 1}",
+        "numbers": nums
+    }), 200
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Not found. Please check the API endpoint."}), 404
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    return jsonify({"error": "Method not allowed. Please use POST for this endpoint."}), 405
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5003)
